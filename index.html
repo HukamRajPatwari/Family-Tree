@@ -1,0 +1,240 @@
+<!-- Vanshavriksh – open source family tree (MIT License). See README.md -->
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8"><title>वंशवृक्ष – Family Tree</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#faf7f0;--fg:#2b2118;--pn:#fff;--bd:#d9cfbd;--ac:#b4561b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1c1814;--fg:#efe6d6;--pn:#2a241d;--bd:#4a4034;--ac:#e08a4a;color-scheme:dark}}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px system-ui,'Noto Sans Devanagari',sans-serif}
+#app{display:flex;flex-direction:column;height:100%}
+#bar{display:flex;flex-wrap:wrap;gap:4px;padding:6px;border-bottom:1px solid var(--bd);align-items:center}
+#main{flex:1;display:flex;min-height:0;position:relative}
+#sv{flex:1;min-width:0;touch-action:none;cursor:grab;display:block;width:100%;height:100%}
+#pnl{width:320px;overflow:auto;padding:10px;border-left:1px solid var(--bd);background:var(--pn);box-sizing:border-box}
+#pnl.h{display:none}
+@media(max-width:700px){#pnl{position:absolute;bottom:0;left:0;right:0;width:auto;max-height:52%;border-left:0;border-top:1px solid var(--bd)}}
+label{display:block;font-size:12px;margin:7px 0 2px;opacity:.85}
+input,select,textarea{width:100%;box-sizing:border-box;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+#bar input,#bar select{width:auto}
+input[type=checkbox]{width:auto}
+fieldset{border:1px solid var(--bd);border-radius:8px;margin:8px 0;padding:6px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.g4 select{grid-column:1/-1}
+.b{padding:6px 9px;border:1px solid var(--bd);border-radius:8px;background:var(--pn);color:var(--fg);cursor:pointer;font:inherit;margin:2px 2px 2px 0}
+.b.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+#sf{display:flex;flex-wrap:wrap;gap:4px;padding:6px;border-bottom:1px solid var(--bd)}#sf[hidden]{display:none}#sf input,#sf select{width:auto;min-width:96px}
+.lg i{font-style:normal;color:#222;padding:1px 6px;border-radius:5px;font-size:12px}
+@media print{#bar,#pnl,#sf{display:none}}
+</style></head><body>
+<div id="app">
+<div id="bar">
+<button class="b p" id="nr">＋ नया व्यक्ति</button>
+<select id="rs" title="वंश चुनें"></select>
+<input id="q" placeholder="🔍 खोजें (नाम, गोत्र, पता, साल…)" size="16"><button class="b" id="sb" title="विस्तृत खोज">🔎</button><span id="qc"></span>
+<span class="lg"><i style="background:#bfdbfe;border:1px solid #1d4ed8">♂ पुरुष</i> <i style="background:#fbcfe8;border:1px solid #be185d">♀ महिला</i></span>
+<button class="b" id="lb">📋 सूची/🗑</button><button class="b" id="yb">⟳ सिंक</button>
+<button class="b" id="zi">＋</button><button class="b" id="zo">－</button><button class="b" id="zf">⤢</button>
+<select id="ex"><option value="">⬇ निर्यात</option><option>SVG</option><option>PNG</option><option>PDF</option><option>HTML</option><option>JSON</option></select>
+<button class="b" id="im">⬆ खोलें</button><input type="file" id="imf" accept=".json" hidden>
+</div>
+<div id="sf" hidden><select data-f="g"><option value="">लिंग (सभी)</option><option value="m">पुरुष</option><option value="f">महिला</option><option value="o">अन्य</option></select>
+<input data-f="go" list="gl" placeholder="गोत्र"><input data-f="ad" placeholder="पता / गाँव"><input data-f="sp" placeholder="जीवनसाथी का नाम"><input data-f="fa" placeholder="पिता का नाम"><input data-f="mo" placeholder="माता का नाम">
+<select data-f="st"><option value="">जीवित/मृत (सभी)</option><option value="a">जीवित</option><option value="d">मृत</option></select>
+<input data-f="y1" type="number" placeholder="जन्म वर्ष से"><input data-f="y2" type="number" placeholder="जन्म वर्ष तक"><label style="margin:0"><input data-f="ph" type="checkbox"> फोटो है</label><button class="b" id="sc">✕ साफ़</button></div>
+<div id="main"><svg id="sv" xmlns="http://www.w3.org/2000/svg"><g id="g"></g></svg><div id="pnl" class="h"></div></div>
+</div>
+<datalist id="gl"></datalist>
+<script type="application/json" id="seed">{}</script>
+<script>
+const $=i=>document.getElementById(i),E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MS=['चैत्र','वैशाख','ज्येष्ठ','आषाढ','श्रावण','भाद्रपद','आश्विन','कार्तिक','मार्गशीर्ष','पौष','माघ','फाल्गुन'];
+const CW=150,CH=92,SG=12,GX=22,GY=64;
+let pend=null,D=[],nid=1,sel=0,rv='all',tab='e',F=nf(),dm={},lastJ={},pos={},bb={x:0,y:0,w:400,h:200},vb={x:0,y:0,w:800,h:500},ts=0,wm={},hits=[],hi=0;
+const sv=$('sv');
+const nI=()=>{let i=Date.now()*1000+Math.floor(Math.random()*1000);while(D.some(p=>p.id==i))i++;return i};
+const mk=o=>{const p={id:nI(),n:'',g:'M',go:'',f:0,m:0,sp:[],inl:0,ad:'',ph:'',nt:'',al:1,b:{},d:{},ls:'',...o};D.push(p);return p};
+const by=id=>D.find(p=>p.id==id);
+const pi=(p,c)=>{const i=p.sp.indexOf(p.g=='F'?c.f:c.m);return i<0?99:i};
+const kids=p=>D.filter(c=>c.f==p.id||c.m==p.id).sort((a,b)=>pi(p,a)-pi(p,b)||(Y(a.b)||9999)-(Y(b.b)||9999)||(a.id>b.id?1:-1));
+const topOf=p=>{let n=0,x;while(p.f&&(x=by(p.f))&&n++<999)p=x;return p};
+const Y=o=>+o.y||(+o.v?+o.v-57:0);
+const age=p=>{const b=Y(p.b);if(!b)return'';const e=p.al?new Date().getFullYear():Y(p.d);return e&&e>=b?e-b:''};
+const LS=p=>p.ls!==''&&p.ls!=null?p.ls:age(p);
+const dt=(o,l)=>{const a=[o.d,o.m,o.y].filter(Boolean).join('/'),v=o.v?'वि.सं.'+o.v:'';return a||v?l+' '+a+(a&&v?' ('+v+')':v):''};
+const gt=(p,k)=>k.split('.').reduce((a,c)=>a==null?a:a[c],p)??'';
+const st=(p,k,v)=>{const a=k.split('.'),l=a.pop();let o=p;a.forEach(c=>o=o[c]);o[l]=v};
+const L=s=>String(s||'').toLowerCase(),act=()=>Object.values(F).some(v=>v);
+function nf(){return{t:'',g:'',go:'',ad:'',sp:'',fa:'',mo:'',st:'',y1:'',y2:'',ph:0}}
+function match(p){if(!act())return false;const f=F,ss=p.sp.map(by).filter(Boolean),fa=by(p.f),mo=by(p.m);
+ const all=[p.n,p.go,p.ad,p.nt,ss.map(x=>x.n+' '+x.ad+' '+x.go).join(' '),fa&&fa.n,mo&&mo.n,p.b.y,p.b.v,p.d.y,p.d.v].join(' ');
+ return !!((!f.t||L(all).includes(f.t))&&(!f.g||L(p.g)==f.g)&&(!f.go||L(p.go).includes(f.go))&&(!f.ad||L(p.ad).includes(f.ad))&&(!f.sp||ss.some(x=>L(x.n).includes(f.sp)))&&(!f.fa||(fa&&L(fa.n).includes(f.fa)))&&(!f.mo||(mo&&L(mo.n).includes(f.mo)))&&(!f.st||(f.st=='a'?p.al:!p.al))&&(!f.y1||(Y(p.b)&&Y(p.b)>=+f.y1))&&(!f.y2||(Y(p.b)&&Y(p.b)<=+f.y2))&&(!f.ph||p.ph))}
+function stamp(init){D.forEach(p=>{const j=JSON.stringify({...p,u:0});if(lastJ[p.id]!==j){if(!init)p.u=Date.now();lastJ[p.id]=j}})}
+function bak(){try{localStorage.setItem('vv_bak',JSON.stringify({ts,D,nid,del:dm}))}catch(e){}}
+function save(){stamp();ts=Date.now();try{localStorage.setItem('vv',JSON.stringify({ts,D,nid,del:dm}))}catch(e){}autoSync()}
+function fix(){D.slice().forEach(c=>{const f=by(c.f);if(f&&f.g=='F'){let h=f.sp.map(by).find(x=>x&&x.g!='F');if(!h){h=mk({g:'M',inl:1,sp:[f.id]});f.sp.push(h.id)}c.m=c.m||f.id;c.f=h.id}})}
+function init(){let a=null,b=null;try{b=JSON.parse(localStorage.getItem('vv'))}catch(e){}try{a=JSON.parse($('seed').textContent)}catch(e){}
+ const s=[a,b].filter(x=>x&&x.D&&x.D.length).sort((x,y)=>y.ts-x.ts)[0];
+ if(s){D=s.D;nid=s.nid||1;ts=s.ts;dm=s.del||{};stamp(1);fix();stamp()}else sample()}
+function sample(){const a=mk({n:'रामलाल',go:'भारद्वाज',ad:'ग्राम उदाहरण, राजस्थान',b:{y:1930,v:1987},al:0,d:{y:2005,v:2062}}),
+ s=mk({n:'सीता देवी',g:'F',go:'कश्यप',inl:1,ad:'ग्राम अन्य, राजस्थान',b:{y:1935,v:1992},sp:[a.id]}),
+ c=mk({n:'मोहन',f:a.id,m:s.id,go:'भारद्वाज',b:{y:1955,v:2012}}),
+ d=mk({n:'कमला',g:'F',f:a.id,m:s.id,b:{y:1960,v:2017}}),
+ w=mk({n:'गीता',g:'F',inl:1,go:'गौतम',sp:[c.id],b:{y:1958,v:2015}});
+ a.sp=[s.id];c.sp=[w.id];D=[a,s,c,d,w]}
+/* layout */
+const uw=p=>{const n=1+p.sp.length;return n*CW+(n-1)*SG};
+function W(p){if(wm[p.id]!=null)return wm[p.id];wm[p.id]=0;const k=kids(p);const kw=k.length?k.reduce((a,c)=>a+W(c),0)+(k.length-1)*GX:0;return wm[p.id]=Math.max(uw(p),kw)}
+function place(p,x,y,o){const tw=W(p),u=uw(p),ux=x+(tw-u)/2,k=kids(p);pos[p.id]={x:ux,y};o.c.push({p,x:ux,y});
+ p.sp.forEach((id,i)=>{const s=by(id);if(!s)return;const sx=ux+(i+1)*(CW+SG);o.c.push({p:s,x:sx,y,s:1});pos[id]||(pos[id]={x:sx,y});o.e.push(`M${sx-SG} ${y+CH/2}H${sx}`)});
+ if(k.length){const kw=k.reduce((a,c)=>a+W(c),0)+(k.length-1)*GX;let kx=x+(tw-kw)/2;const cy=y+CH+GY,my=y+CH+GY/2,px=ux+u/2,xs=[px];
+  o.e.push(`M${px} ${y+CH}V${my}`);
+  k.forEach(c=>{const w=W(c);place(c,kx,cy,o);const cx=pos[c.id].x+CW/2;xs.push(cx);o.e.push(`M${cx} ${cy}V${my}`);kx+=w+GX});
+  o.e.push(`M${Math.min(...xs)} ${my}H${Math.max(...xs)}`)}}
+let cn=0;
+function card(c){const p=c.p,{x,y}=c,M=p.g=='M',F=p.g=='F',on=p.id==sel,hit=match(p),k='k'+(cn++);
+ const fill=M?'#bfdbfe':F?'#fbcfe8':'#e5e7eb',sc=M?'#1d4ed8':F?'#be185d':'#6b7280',tx=x+(p.ph?46:8),T=(t,dy,sz,w,l)=>`<text x="${tx}" y="${y+dy}" font-size="${sz}" font-weight="${w||400}" fill="#222">${E(String(t).slice(0,l||24))}</text>`;
+ let s=`<g class="cd" data-id="${p.id}"><rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="10" fill="${fill}" stroke="${on?'#e65100':hit?'#f59e0b':sc}" stroke-width="${on?4:hit?6:1.6}"${p.al?'':' stroke-dasharray="5 3"'}/>`;
+ if(p.ph)s+=`<clipPath id="${k}"><circle cx="${x+27}" cy="${y+24}" r="17"/></clipPath><image href="${p.ph}" x="${x+10}" y="${y+7}" width="34" height="34" clip-path="url(#${k})" preserveAspectRatio="xMidYMid slice"/>`;
+ s+=T(p.n||'(नाम?)',18,13,700,p.ph?15:19)+`<text x="${x+CW-16}" y="${y+16}" font-size="12" fill="${sc}">${M?'♂':F?'♀':'⚧'}</text>`;
+ if(c.s&&p.f)s+=`<text x="${x+CW-16}" y="${y+32}" font-size="12" fill="#b4561b">⤴</text>`;
+ s+=(p.go?T('गोत्र: '+p.go,p.ph?47:33,10.5):'')+T(p.ad?'पता: '+p.ad:'',46+(p.ph?2:0),10)+T(dt(p.b,'ज.'),60,10,0,34)+T(p.al?'जीवित':dt(p.d,'मृ.')||'मृत',72,10,0,34);
+ const l=LS(p);return s+(l!==''?T('आयु: '+l+' वर्ष',85,10,600):'')+'</g>'}
+function draw(){wm={};pos={};cn=0;const o={c:[],e:[]},R=rv=='all'?D.filter(p=>!p.f&&!p.inl):[by(rv)].filter(Boolean);let x=0;
+ R.forEach(r=>{place(r,x,0,o);x+=W(r)+GX*3});
+ let s='',x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+ o.e.forEach(d=>s+=`<path d="${d}" fill="none" stroke="#8a7a62" stroke-width="1.6"/>`);
+ o.c.forEach(c=>{s+=card(c);x0=Math.min(x0,c.x);y0=Math.min(y0,c.y);x1=Math.max(x1,c.x+CW);y1=Math.max(y1,c.y+CH)});
+ bb=o.c.length?{x:x0,y:y0,w:x1-x0,h:y1-y0}:{x:0,y:0,w:400,h:200};
+ $('g').innerHTML=s||'<text x="40" y="100" font-size="20" fill="#8a7a62">＋ नया व्यक्ति दबाकर शुरू करें</text>';
+ const rs=$('rs'),R2=D.filter(p=>!p.f&&!p.inl);if(rv!='all'&&!R2.find(p=>p.id==rv)){const z=by(rv);z&&R2.push(z)}
+ rs.innerHTML='<option value="all">🌳 सभी वंश</option>'+R2.map(p=>`<option value="${p.id}">${E(p.n||'(नाम?)')} का वंश</option>`).join('');rs.value=rv;
+ $('gl').innerHTML=[...new Set(D.map(p=>p.go).concat(['भारद्वाज','कश्यप','वशिष्ठ','गौतम','अत्रि','विश्वामित्र','जमदग्नि','शांडिल्य','पराशर','कौशिक','वत्स','गर्ग']).filter(Boolean))].map(g=>`<option value="${E(g)}">`).join('')}
+let rq=0;const sched=()=>{cancelAnimationFrame(rq);rq=requestAnimationFrame(draw)};
+/* view */
+function setVB(){const r=sv.clientHeight/sv.clientWidth||.6;vb.h=vb.w*r;sv.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`)}
+function fit(){const m=40,r=sv.clientHeight/sv.clientWidth||.6;vb.w=Math.max(bb.w+2*m,(bb.h+2*m)/r);vb.h=vb.w*r;vb.x=bb.x+bb.w/2-vb.w/2;vb.y=bb.y+bb.h/2-vb.h/2;setVB()}
+function focus(id){const a=pos[id];if(!a)return;vb.x=a.x+CW/2-vb.w/2;vb.y=a.y+CH/2-vb.h/2;setVB()}
+function zoom(f,fx=.5,fy=.5){const px=vb.x+vb.w*fx,py=vb.y+vb.h*fy;vb.w*=f;vb.x=px-vb.w*fx;vb.y=py-(vb.w*(sv.clientHeight/sv.clientWidth))*fy;setVB()}
+const ptr=new Map;let mv=0,pd=0;
+const pdist=()=>{const c=[...ptr.values()];return c.length==2?Math.hypot(c[0][0]-c[1][0],c[0][1]-c[1][1]):0};
+sv.onpointerdown=e=>{ptr.set(e.pointerId,[e.clientX,e.clientY]);mv=0;pd=pdist()};
+sv.onpointermove=e=>{if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId),n=[e.clientX,e.clientY];ptr.set(e.pointerId,n);
+ if(ptr.size==1){const dx=n[0]-o[0],dy=n[1]-o[1];mv+=Math.abs(dx)+Math.abs(dy);const s=vb.w/sv.clientWidth;vb.x-=dx*s;vb.y-=dy*s;setVB()}
+ else if(ptr.size==2){mv+=9;const d=pdist(),r=sv.getBoundingClientRect(),c=[...ptr.values()];if(pd)zoom(pd/d,((c[0][0]+c[1][0])/2-r.left)/r.width,((c[0][1]+c[1][1])/2-r.top)/r.height);pd=d}};
+sv.onpointerup=sv.onpointercancel=e=>{ptr.delete(e.pointerId);pd=0};
+sv.onwheel=e=>{e.preventDefault();const r=sv.getBoundingClientRect();zoom(e.deltaY>0?1.12:.89,(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height)};
+sv.onclick=e=>{if(mv>6)return;const g=e.target.closest('.cd');if(g){sel=+g.dataset.id;draw();panel()}};
+window.onresize=setVB;
+$('zi').onclick=()=>zoom(.8);$('zo').onclick=()=>zoom(1.25);$('zf').onclick=fit;
+$('rs').onchange=e=>{rv=e.target.value;draw();fit()};
+/* search */
+const upd=()=>{hits=act()?D.filter(match):[];hi=0;$('qc').textContent=act()?hits.length+' मिले':'';draw();if(tab=='l')panel()};
+$('q').oninput=e=>{F.t=L(e.target.value.trim());upd()};
+$('sf').oninput=e=>{const k=e.target.dataset.f;if(!k)return;F[k]=e.target.type=='checkbox'?(e.target.checked?1:0):L(e.target.value.trim());upd()};
+$('sc').onclick=()=>{F=nf();$('sf').querySelectorAll('[data-f]').forEach(i=>i.type=='checkbox'?i.checked=false:i.value='');$('q').value='';upd()};
+$('sb').onclick=()=>{$('sf').hidden=!$('sf').hidden;setVB()};
+$('q').onkeydown=e=>{if(e.key!='Enter'||!hits.length)return;const m=hits[hi++%hits.length];if(!pos[m.id]){rv='all';draw()}sel=m.id;tab='e';draw();focus(m.id);panel()};
+/* panel */
+const TB=()=>`<div><button class="b${tab=='e'?' p':''}" data-t="e">✏ संपादन</button><button class="b${tab=='l'?' p':''}" data-t="l">📋 सूची / 🗑 हटाएँ</button><button class="b${tab=='s'?' p':''}" data-t="s">⟳ सिंक</button><button class="b" data-a="x" style="float:right">✕</button></div>`;
+function toast(t){let e=$('tt');if(!e){e=document.createElement('div');e.id='tt';e.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9;background:#222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;display:none';document.body.appendChild(e)}e.textContent=t;e.style.display='block';clearTimeout(e.t);e.t=setTimeout(()=>e.style.display='none',4000)}
+const CB=()=>{const x=by(pend);return x?`<div style="border:2px solid #c62828;border-radius:8px;padding:8px;margin:6px 0"><b>${E(x.n||'यह सदस्य')}</b> को हटाएँ?<br><small>संतान आदि सहित कुल ${dset(x).size} सदस्य हटेंगे। बैकअप अपने‑आप रखा जाएगा।</small><br><button class="b" style="background:#c62828;color:#fff" data-a="dyes">हाँ, हटाएँ</button><button class="b" data-a="dno">रद्द</button></div>`:''};
+function panel(){const p=by(sel),h=$('pnl');if(pend&&!by(pend))pend=null;h.classList.toggle('h',tab=='e'&&!p&&!pend);
+ const c=CB();if(tab=='l')h.innerHTML=TB()+c+lst();else if(tab=='s')h.innerHTML=TB()+c+syn();else if(p||pend)h.innerHTML=TB()+c+(p?edit(p):'');setVB()}
+function lst(){const R2=D.filter(p=>!act()||match(p)).sort((a,b)=>(a.n||'').localeCompare(b.n||'','hi'));
+ return `<div><small>${act()?'खोज परिणाम':'कुल सदस्य'}: ${R2.length} / ${D.length}</small> <button class="b" data-a="restore">↩ बैकअप वापस लाएँ</button></div>`+R2.map(p=>`<div style="display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--bd);padding:4px 0"><button class="b" data-go="${p.id}">👁</button><div style="flex:1;min-width:0"><b>${E(p.n||'(नाम?)')}</b> ${p.g=='M'?'♂':p.g=='F'?'♀':'⚧'}<br><small>${E([p.go&&'गोत्र '+p.go,p.ad].filter(Boolean).join(' · '))}</small></div><button class="b" data-dp="${p.id}" title="हटाएँ">🗑</button></div>`).join('')}
+const cfg=()=>{try{return JSON.parse(localStorage.getItem('vvs'))||{}}catch(e){return{}}};
+function syn(){const c=cfg();return `<p><small>अपने Supabase डेटाबेस से सिंक (README देखें)। यह सुविधा GitHub Pages / अपनी साइट पर रखे संस्करण में चलती है; Claude के पेज में ब्राउज़र बाहरी सर्वर रोक देता है।</small></p><label>Supabase URL<input data-s="url" value="${E(c.url||'')}" placeholder="https://xxxx.supabase.co"></label><label>Anon key<input data-s="key" value="${E(c.key||'')}"></label><label>वंश ID (जैसे गाँव‑गोत्र)<input data-s="tid" value="${E(c.tid||'')}"></label><label><input type="checkbox" data-s="auto"${c.auto?' checked':''}> हर बदलाव पर अपने‑आप सिंक</label><button class="b p" data-a="sync">⟳ अभी सिंक करें</button><div id="sst" style="margin-top:6px"></div>`}
+let sto=0;function autoSync(){const c=cfg();if(!c.auto||!c.url)return;clearTimeout(sto);sto=setTimeout(syncNow,3000)}
+function merge(o){const d2={...dm,...(o.del||{})},m=new Map;D.concat(o.D||[]).forEach(p=>{const e=m.get(p.id);if(!e||(p.u||0)>(e.u||0))m.set(p.id,p)});D=[...m.values()].filter(p=>!(d2[p.id]&&d2[p.id]>=(p.u||0)));dm=d2;D.forEach(p=>{p.sp=p.sp.filter(i=>by(i))})}
+async function syncNow(){const c=cfg(),s=$('sst'),m=t=>{if(s)s.textContent=t};if(!c.url||!c.key||!c.tid)return m('URL, key और वंश ID भरें');m('सिंक हो रहा है…');
+ try{const u=c.url.replace(/\/$/,'')+'/rest/v1/vv',h={apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json'};
+ const r=await fetch(u+'?id=eq.'+encodeURIComponent(c.tid)+'&select=data',{headers:h});if(!r.ok)throw new Error(r.status);const j=await r.json();
+ if(j[0]&&j[0].data){bak();merge(j[0].data);fix();stamp()}
+ const w=await fetch(u+'?on_conflict=id',{method:'POST',headers:{...h,Prefer:'resolution=merge-duplicates'},body:JSON.stringify({id:c.tid,data:{ts:Date.now(),D,nid,del:dm}})});if(!w.ok)throw new Error(w.status);
+ ts=Date.now();try{localStorage.setItem('vv',JSON.stringify({ts,D,nid,del:dm}))}catch(e){}draw();m('✔ सिंक हो गया '+new Date().toLocaleTimeString())}catch(x){m('✖ सिंक विफल: '+x.message)}}
+function edit(p){
+ const I=(l,k,t='text',x='')=>`<label>${l}<input data-k="${k}" type="${t}" value="${E(gt(p,k))}" ${x}></label>`;
+ const DF=(l,k)=>`<fieldset><legend>${l}</legend><div class="g4"><input data-k="${k}.d" type="number" min="1" max="31" placeholder="दिन" value="${E(gt(p,k+'.d'))}"><input data-k="${k}.m" type="number" min="1" max="12" placeholder="माह" value="${E(gt(p,k+'.m'))}"><input data-k="${k}.y" type="number" placeholder="ई.सन" value="${E(gt(p,k+'.y'))}"><input data-k="${k}.v" type="number" placeholder="वि.सं." value="${E(gt(p,k+'.v'))}"><select data-k="${k}.p"><option value="">वि.सं. माह (वैकल्पिक)</option>${MS.map((m,i)=>`<option value="${i+1}"${gt(p,k+'.p')==i+1?' selected':''}>${m}</option>`).join('')}</select></div></fieldset>`;
+ const fa=p.f&&by(p.f),mo=p.m&&by(p.m),sp=p.sp.map(by).filter(Boolean),nk=D.filter(c=>c.f==p.id||c.m==p.id).length,
+ oth=D.filter(x=>x.id!=p.id&&!p.sp.includes(x.id)).sort((a,b)=>(a.n||'').localeCompare(b.n||'','hi'));
+ return `<div><b>${E(p.n||'(नाम?)')}</b> <small>${nk?nk+' संतान':''}</small></div>
+ <div>${fa?`<button class="b" data-go="${fa.id}">↑ पिता: ${E(fa.n||'?')}</button>`:''}${mo?`<button class="b" data-go="${mo.id}">↑ माता: ${E(mo.n||'?')}</button>`:''}</div>
+ <div>${sp.map(s=>`<button class="b" data-go="${s.id}">♥ ${E(s.n||'?')}</button><button class="b" data-un="${s.id}" title="जोड़ हटाएँ">✂</button>`).join('')}</div>
+ ${sp.length>1?`<label>संतान किस साथी से जोड़नी है<select id="cp">${sp.map(s=>`<option value="${s.id}">${E(s.n||'?')}</option>`).join('')}</select></label>`:''}
+ <div><button class="b p" data-a="child">＋ संतान</button><button class="b p" data-a="spouse">＋ जीवनसाथी</button>${p.f?'':'<button class="b p" data-a="par">↑ माता‑पिता</button>'}${fa?'<button class="b" data-a="fetch">⟲ पिता से गोत्र/पता लें</button>':''}<button class="b" data-a="tree">🌳 वंश दृश्य</button><button class="b" data-dp="${p.id}">🗑 हटाएँ</button></div>
+ <label>मौजूदा व्यक्ति को जीवनसाथी बनाएँ<select id="lk"><option value="">— चुनें —</option>${oth.map(x=>`<option value="${x.id}">${E((x.n||'?')+(x.go?' · '+x.go:''))}</option>`).join('')}</select></label>
+ ${I('नाम','n')}<label>लिंग<select data-k="g"><option value="M"${p.g=='M'?' selected':''}>पुरुष</option><option value="F"${p.g=='F'?' selected':''}>महिला</option><option value="O"${p.g=='O'?' selected':''}>अन्य</option></select></label>
+ ${I('गोत्र'+(p.ga?' (पिता से स्वतः)':''),'go','text','list="gl"')}${I('पता'+(p.aa?' (पिता से स्वतः)':'')+' – जीवनसाथी हो तो उसका पता/मायका','ad')}
+ <label>फोटो <input type="file" id="pf" accept="image/*"></label>${p.ph?'<button class="b" data-a="rph">फोटो हटाएँ</button>':''}
+ ${DF('जन्म तिथि','b')}<label><input type="checkbox" data-k="al"${p.al?' checked':''}> जीवित है</label>${p.al?'':DF('मृत्यु तिथि','d')}
+ <label>जीवनकाल / आयु (वर्ष) – खाली छोड़ें तो स्वतः<input id="lsi" data-k="ls" type="number" value="${E(p.ls)}" placeholder="स्वतः: ${age(p)}"></label>
+ ${fa&&fa.sp.length?`<label>माता<select data-k="m"><option value="0">—</option>${fa.sp.map(by).filter(x=>x&&x.g=='F').map(m=>`<option value="${m.id}"${p.m==m.id?' selected':''}>${E(m.n||'?')}</option>`).join('')}</select></label>`:''}
+ <label>टिप्पणी / अतिरिक्त जानकारी<textarea data-k="nt" rows="3">${E(p.nt)}</textarea></label>`}
+function sync(k){const p=by(sel),m=k.match(/^([bd])\.([yv])$/);if(!m)return;const o=p[m[1]],s=m[2],a=s=='y'?'v':'y',d=s=='y'?57:-57;o[s+'a']=0;
+ if(o[a]==null||o[a]===''||o[a+'a']){o[a]=o[s]===''?'':+o[s]+d;o[a+'a']=1}
+ const i=document.querySelector(`[data-k="${m[1]}.${a}"]`);if(i)i.value=o[a]}
+function prop(p,k){D.forEach(c=>{if(c.f==p.id&&(k=='go'?c.ga:c.aa)){c[k]=p[k];prop(c,k)}})}
+$('pnl').oninput=e=>{const t=e.target,sk=t.dataset.s;if(sk){const c=cfg();c[sk]=t.type=='checkbox'?t.checked:t.value.trim();try{localStorage.setItem('vvs',JSON.stringify(c))}catch(x){}return}
+ const k=t.dataset.k;if(!k)return;const p=by(sel);let v=t.type=='checkbox'?(t.checked?1:0):t.value;if(k=='m'||k=='al')v=+v;
+ if(k=='g'&&v=='F'&&D.some(c=>c.f==p.id)){toast('इस व्यक्ति की संतान इसके नाम पिता के रूप में जुड़ी है, पिता महिला नहीं हो सकता।');t.value='M';return}
+ st(p,k,v);sync(k);if(k=='go'){p.ga=0;prop(p,'go')}if(k=='ad'){p.aa=0;prop(p,'ad')}
+ const l=$('lsi');if(l)l.placeholder='स्वतः: '+age(p);save();if(k=='al')panel();sched()};
+$('pnl').onchange=e=>{const t=e.target;
+ if(t.id=='lk'&&t.value){const b=by(t.value),p=by(sel);if(b&&p&&!p.sp.includes(b.id)){p.sp.push(b.id);b.sp.push(p.id);save();draw();panel()}return}
+ if(t.id!='pf'||!t.files[0])return;const r=new FileReader;r.onload=()=>{const im=new Image;im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=96;const s=Math.min(im.width,im.height);c.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,96,96);by(sel).ph=c.toDataURL('image/jpeg',.75);save();draw();panel()};im.src=r.result};r.readAsDataURL(t.files[0])};
+const go=id=>{sel=+id;tab='e';if(!pos[id])rv='all';draw();focus(sel);panel()};
+function unl(a,b){if(!a||!b)return;a.sp=a.sp.filter(i=>i!=b.id);b.sp=b.sp.filter(i=>i!=a.id);[a,b].forEach(x=>{if(x.inl&&!x.f&&!x.sp.length)x.inl=0});save();draw();panel()}
+$('pnl').onclick=e=>{const t=e.target.closest('button');if(!t)return;const d=t.dataset;
+ if(d.t){tab=d.t;return panel()}
+ if(d.go)return go(d.go);
+ if(d.dp){const x=by(d.dp);if(x){pend=x.id;panel()}return}
+ if(d.a=='dno'){pend=null;return panel()}
+ if(d.a=='dyes'){const x=by(pend);pend=null;if(x)del(x);else panel();return}
+ if(d.a=='restore')return restore();
+ if(d.un)return unl(by(sel),by(d.un));
+ const a=d.a,p=by(sel);
+ if(a=='x'){tab='e';sel=0;draw();return panel()}
+ if(a=='sync')return syncNow();
+ if(!a||!p)return;
+ if(a=='rph'){p.ph='';save();draw();return panel()}
+ if(a=='tree'){const r=topOf(p);rv=r.id;draw();fit();return}
+ if(a=='fetch'){const f=by(p.f);if(f){p.go=f.go;p.ad=f.ad;p.ga=p.aa=1;prop(p,'go');prop(p,'ad');save();draw();panel()}return}
+ let n;
+ if(a=='child'){const cp=$('cp'),pt=by(cp?cp.value:p.sp[0]);let fa,mo;
+  if(p.g=='F'){mo=p;fa=pt&&pt.g!='F'?pt:p.sp.map(by).find(x=>x&&x.g!='F');if(!fa){fa=mk({g:'M',inl:1,sp:[p.id]});p.sp.push(fa.id)}}
+  else{fa=p;mo=pt&&pt.g=='F'?pt:null}
+  n=mk({f:fa.id,m:mo?mo.id:0,go:fa.go,ad:fa.ad,ga:1,aa:1})}
+ if(a=='spouse'){n=mk({g:p.g=='M'?'F':'M',inl:1,sp:[p.id]});p.sp.push(n.id)}
+ if(a=='par'){const f=mk({go:p.go}),mo=mk({g:'F',inl:1,sp:[f.id]});f.sp=[mo.id];p.f=f.id;p.m=mo.id;p.ga=1;if(rv==p.id)rv=f.id;n=f}
+ if(!n)return;save();sel=n.id;tab='e';draw();focus(n.id);panel()};
+const dset=p=>{const ids=new Set,add=x=>{ids.add(x.id);D.filter(c=>c.f==x.id).forEach(add);x.sp.map(by).forEach(s=>s&&s.inl&&!s.f&&s.sp.length<2&&ids.add(s.id))};add(p);return ids};
+function del(p){const ids=dset(p),n=D.length;bak();const t=Date.now();ids.forEach(i=>dm[i]=t);D=D.filter(x=>!ids.has(x.id));D.forEach(x=>{x.sp=x.sp.filter(i=>!ids.has(i));if(ids.has(x.m))x.m=0});
+ if(ids.has(+rv))rv='all';sel=0;save();draw();panel();toast(ids.size+' सदस्य हटाए। शेष '+D.length+'। (↩ बैकअप वापस लाएँ से लौट सकते हैं)')}
+function restore(){let b=null;try{b=JSON.parse(localStorage.getItem('vv_bak'))}catch(e){}if(!b||!b.D)return toast('कोई बैकअप नहीं मिला');
+ const cur=JSON.stringify({ts,D,nid,del:dm});D=b.D;dm=b.del||{};const t=Date.now();D.forEach(p=>{p.u=t;delete dm[p.id]});try{localStorage.setItem('vv_bak',cur)}catch(e){}stamp(1);sel=0;save();draw();panel();toast('बैकअप वापस आ गया: '+D.length+' सदस्य')}
+$('nr').onclick=()=>{const n=mk({});rv='all';sel=n.id;tab='e';save();draw();focus(n.id);panel()};
+$('lb').onclick=()=>{tab='l';panel()};$('yb').onclick=()=>{tab='s';panel()};
+/* export / import */
+async function dl(fn,data,mime){const b=data instanceof Blob?data:new Blob([data],{type:mime});
+ try{const d=window.claude&&await claude.use('downloads');if(d){await d.save({filename:fn,data:b});return}}catch(e){if(e&&e.code=='declined')return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;a.click()}
+function svgStr(){const m=30,w=bb.w+2*m,h=bb.h+2*m;return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${bb.x-m} ${bb.y-m} ${w} ${h}" font-family="sans-serif"><rect x="${bb.x-m}" y="${bb.y-m}" width="${w}" height="${h}" fill="#fff"/>${$('g').innerHTML}</svg>`}
+async function cv(){const im=new Image;im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgStr());await im.decode();const k=Math.min(2,6000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c}
+async function pdf(){const c=await cv(),bin=atob(c.toDataURL('image/jpeg',.92).split(',')[1]),n=bin.length,u=new Uint8Array(n);for(let i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+ const w=Math.round(c.width/2),h=Math.round(c.height/2),H=s=>new TextEncoder().encode(s),parts=[],off=[];let len=0;const add=b=>{parts.push(b);len+=b.length},ob=(i,b)=>{off[i]=len;add(H(i+' 0 obj\n'+b+'\nendobj\n'))};
+ add(H('%PDF-1.4\n'));ob(1,'<</Type/Catalog/Pages 2 0 R>>');ob(2,'<</Type/Pages/Kids[3 0 R]/Count 1>>');
+ ob(3,`<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${w} ${h}]/Resources<</XObject<</I 4 0 R>>>>/Contents 5 0 R>>`);
+ off[4]=len;add(H(`4 0 obj\n<</Type/XObject/Subtype/Image/Width ${c.width}/Height ${c.height}/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${n}>>\nstream\n`));add(u);add(H('\nendstream\nendobj\n'));
+ const ct=`q ${w} 0 0 ${h} 0 0 cm /I Do Q`;ob(5,`<</Length ${ct.length}>>\nstream\n${ct}\nendstream`);
+ const x=len;let t='xref\n0 6\n0000000000 65535 f \n';for(let i=1;i<6;i++)t+=String(off[i]).padStart(10,'0')+' 00000 n \n';
+ add(H(t+`trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n${x}\n%%EOF`));dl('vanshavriksh.pdf',new Blob(parts,{type:'application/pdf'}))}
+$('ex').onchange=async e=>{const v=e.target.value;e.target.value='';
+ if(v=='SVG')dl('vanshavriksh.svg',svgStr(),'image/svg+xml');
+ if(v=='PNG'){const c=await cv();c.toBlob(b=>dl('vanshavriksh.png',b))}
+ if(v=='PDF')pdf();
+ if(v=='JSON')dl('vanshavriksh.json',JSON.stringify({ts,D,nid,del:dm}),'application/json');
+ if(v=='HTML'){$('seed').textContent=JSON.stringify({ts,D,nid,del:dm}).replace(/</g,'\\u003c');const h='<!DOCTYPE html>\n'+document.documentElement.outerHTML;$('seed').textContent='{}';dl('vanshavriksh.html',h,'text/html')}};
+$('im').onclick=()=>$('imf').click();
+$('imf').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.D)throw 0;bak();toast('फ़ाइल खुली; पुराना डेटा बैकअप में रखा है');D=j.D;nid=j.nid||1;dm=j.del||{};rv='all';sel=0;stamp(1);fix();stamp();save();draw();fit();panel()}catch(x){toast('फ़ाइल सही नहीं है')}});e.target.value=''};
+init();draw();setVB();fit();
+</script></body></html>
